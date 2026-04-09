@@ -1,0 +1,96 @@
+Project Title
+Comparing Ride Pricing and Trip Patterns Across NYC Yellow Taxis and App-Based High-Volume FHVs: A Multi-Source Analysis with Weather, Income, and Transit Context
+
+All Group Members' Names & Duties
+Chen Cheng: data collection from all sources (TLC, Open-Meteo API, Census API, MTA SODA API), schema alignment across Yellow Taxi and HVFHV datasets, multi-source joins (taxi zones, weather, income, subway ridership), data cleaning, and Dask-based large-data processing pipeline.
+Yuxin Gao: EDA design and execution (13+ visualizations including Folium geospatial maps), feature engineering (temporal, speed, weather, and area-level features with PCA), regression and classification modeling (Linear, Ridge/Lasso, XGBoost, Random Forest, PyTorch neural network), hyperparameter tuning, and model evaluation.
+Xinyi Wang: hypothesis testing design and implementation (permutation test, Mann-Whitney U test, bootstrap confidence intervals), null distribution visualization, statistical write-up, and modeling evaluation support (residual analysis, confusion matrices).
+Zihao Zhu: project narrative and storyline design, introduction and conclusion writing, markdown documentation throughout the notebook, visualization polishing (consistent styling, labeling, color palettes), Folium map assistance, notebook integration and end-to-end reproducibility check, and final presentation coordination.
+
+Data Sources
+We will use seven datasets from five distinct sources:
+
+1. NYC TLC Trip Record Data (https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page):
+   - Yellow Taxi Trip Records, November 2024 (parquet, ~3.6M rows, 19 columns). Contains pickup/dropoff times and locations, trip distances, itemized fares (fare_amount, extra, mta_tax, improvement_surcharge, congestion_surcharge, airport_fee, cbd_congestion_fee), rate types, payment types, and passenger counts.
+   - High Volume For-Hire Vehicle (HVFHV) Trip Records, November 2024 (parquet, ~20M rows, 24 columns). Identifies companies (Uber, Lyft, Via, Juno) via hvfhs_license_num, and includes request/pickup/dropoff timestamps, trip miles, trip time, base passenger fare, tolls, sales tax, congestion surcharge, airport fee, tips, driver pay, and shared/WAV ride flags.
+   - Taxi Zone Lookup Table (CSV, 265 zones) and Taxi Zone Shapefile/GeoJSON (263 geographic polygons) for mapping LocationIDs to boroughs, zone names, and map boundaries.
+
+2. Open-Meteo Historical Weather API (https://open-meteo.com/):
+   - Hourly weather data for NYC in November 2024 (720 records). Fields: temperature (C), precipitation (mm), rain (mm), snowfall (cm), wind speed (km/h), and WMO weather code. Free, no API key required. We will call the API programmatically in the notebook.
+
+3. U.S. Census Bureau American Community Survey API (https://api.census.gov/):
+   - Median household income by ZIP Code Tabulation Area (ZCTA) for New York City (184 ZIPs with valid data, ACS 2022 5-year estimates, variable B19013_001E). Free, no API key required. We will aggregate to borough level and classify areas into income tiers.
+
+4. MTA Subway Hourly Ridership via NYC Open Data SODA API (https://data.ny.gov/resource/wujg-7c2s.csv):
+   - Hourly subway ridership by station for November 2024 (~315K aggregated rows, 428 stations). Includes station name, borough, latitude/longitude, ridership counts, and transfers. We will aggregate by borough and hour to measure transit demand alongside taxi demand.
+
+Objective and Value Proposition
+Our project aims to study how trip prices and trip patterns differ between traditional yellow taxis and app-based high-volume for-hire services in New York City, enriched with external context from weather conditions, neighborhood income levels, and public transit availability.
+
+The ultimate objective is to understand: (1) when and where riders are likely to pay more, (2) what trip characteristics and external factors most strongly drive passenger charges, (3) whether app-based services and metered taxis behave differently after accounting for trip context, and (4) how weather and subway ridership interact with taxi demand and pricing.
+
+This project is interesting because it combines large-scale real-world transportation data with weather, socioeconomic, and transit data to answer questions that are immediately relevant to riders, transportation analysts, and policymakers. By integrating multiple data sources and applying both statistical testing and machine learning, we go beyond simple fare comparison to understand the broader ecosystem of urban transportation pricing.
+
+Exploratory Data Analysis Plan
+We plan to produce at least 13 visualizations spanning multiple chart types:
+- Trip volume comparisons: Yellow vs HVFHV monthly totals (bar chart), 24-hour demand curves by service type (line plot).
+- Pricing analysis: 24-hour average price curves by service type (line plot), price distribution by borough (box plot), Yellow vs HVFHV price comparison by borough (grouped box plot).
+- Geospatial analysis: Folium choropleth maps of average price by taxi zone, and service coverage comparison (Yellow vs HVFHV pickup density by zone).
+- Correlation analysis: numerical feature correlation heatmap (seaborn).
+- External factor analysis: weather vs trip volume/price (scatter plot with trend line), rainy/snowy vs clear day price distributions (violin plot), subway ridership vs taxi demand (scatter/dual-axis plot).
+- Service feature analysis: HVFHV shared vs non-shared ride pricing (bar chart), area income level vs average fare (scatter with regression line).
+
+Feature Engineering Plan
+We will construct the following feature groups:
+- Temporal features: hour, day_of_week, is_weekend, is_rush_hour (7-9 AM and 5-7 PM).
+- Trip features: avg_speed (trip_miles / trip_time_hours), wait_time for HVFHV (pickup minus request time).
+- Weather features: temperature, precipitation, is_rainy (WMO code >= 51), is_snowy.
+- Area-level features: borough_income_level (low/mid/high from Census data), hourly_subway_ridership (from MTA data).
+- Dimensionality reduction: PCA on one-hot encoded zone features, with explained variance analysis to select components.
+- Preprocessing: StandardScaler normalization, 80/20 train/test split.
+
+Modeling Plan
+We will conduct two rounds of modeling, plus an additional classification task.
+
+Round 1 — Baseline Regression (predict effective_passenger_charge):
+For Yellow Taxi trips, effective_passenger_charge = fare_amount + extra + mta_tax + improvement_surcharge + congestion_surcharge + Airport_fee (pre-tip, excluding tolls). Note: the column is capitalized as Airport_fee in the actual data; cbd_congestion_fee does not exist in November 2024 data as NYC congestion pricing launched January 5, 2025. For HVFHV trips, effective_passenger_charge = base_passenger_fare + bcf + sales_tax + congestion_surcharge + airport_fee. We exclude tips (Yellow Taxi only records credit card tips, making comparison unfair) and tolls (route-dependent, not pricing-scheme-dependent).
+- Linear Regression (baseline)
+- Ridge Regression and Lasso Regression
+- Evaluate with R-squared, MSE, MAE; analyze residual plots to identify weaknesses.
+
+Round 2 — Advanced Regression (with enriched features from weather, income, subway data):
+- XGBoost Regressor with RandomizedSearchCV hyperparameter tuning
+- Random Forest Regressor with RandomizedSearchCV hyperparameter tuning
+- PyTorch Neural Network (MLP with 4-5 layers, ReLU activation, Adam optimizer, MSE loss)
+- Compare all models in a unified evaluation table; analyze feature importance from tree-based models.
+
+Classification Task — Predict service type (Yellow Taxi vs HVFHV) given trip features:
+- Logistic Regression and Random Forest Classifier
+- Evaluate with Accuracy, Precision, Recall, F1-score, Confusion Matrix, and ROC-AUC curve.
+
+Hypothesis Testing Plan
+We will conduct three formal hypothesis tests:
+
+H1 (Primary — Permutation Test):
+H0: After controlling for pickup zone, dropoff zone, hour-of-day bucket, and distance bucket, the mean effective_passenger_charge is the same for Yellow Taxi and HVFHV trips.
+H1: The means differ.
+Method: Shuffle service-type labels 10,000 times, recompute difference in mean charge-per-mile, build null distribution, and compute p-value. Visualize with histogram of null distribution and observed statistic marked.
+
+H2 (Rush Hour Effect — Mann-Whitney U Test):
+H0: The distribution of charge_per_mile during rush hours (7-9 AM, 5-7 PM) is the same as during non-rush hours.
+H1: The distributions differ.
+Method: Mann-Whitney U test (non-parametric, robust to skewed fare distributions). Report U statistic, p-value, and effect size.
+
+H3 (Weather Effect — Bootstrap Confidence Interval + t-test):
+H0: Taxi demand (trip count per hour) is the same on rainy days vs clear days.
+H1: Rainy days have higher taxi demand.
+Method: Compute observed difference in mean hourly trip counts, construct 95% bootstrap confidence interval (10,000 resamples), and conduct two-sample t-test. Visualize bootstrap distribution.
+
+Each test will include: formal H0/H1 statement, test statistic definition, p-value, visualization of null/bootstrap distribution with observed value marked, and plain-language interpretation.
+
+Anticipated Obstacles & Challenges
+1. Schema mismatch: Yellow Taxi and HVFHV use different pricing fields. We address this by defining a common effective_passenger_charge metric with clearly documented components from each dataset.
+2. Observational comparability: Even similar-looking trips may differ in routing or surge pricing. We mitigate this by stratifying comparisons by zone, hour, and distance bucket, and by clearly stating that our findings are observational, not causal.
+3. Data volume: HVFHV data contains ~20M rows per month. We will use Dask DataFrames for out-of-core parallel processing, demonstrating scalability tools appropriate for a Big Data Analytics course.
+4. Multi-source join complexity: Joining seven datasets requires careful key alignment. Weather joins on hour, zone data joins on LocationID, income joins on borough, and MTA data joins on borough + hour. We will validate join coverage at each step.
+5. Class imbalance: HVFHV trips (~20M) vastly outnumber Yellow Taxi trips (~3.6M). For modeling and hypothesis testing, we will use stratified sampling or weighting to ensure fair comparison.
